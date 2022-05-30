@@ -76,7 +76,7 @@
 
     // Step 1a: Making sure you gave us everything we need on your request
     const psk = request.headers.has(AUTH_HEADER_KEY) ? request.headers.get(AUTH_HEADER_KEY) : undefined;
-    let Key = searchParams.has('Key') ? searchParams.get('Key') : undefined;
+    let Key = searchParams.has('Key') ? searchParams.get('Key') : undefined; // If you're not using Uint8Array, it NEEDS to be in Base64 as it's more consistent
     let Salt = searchParams.has('Salt') ? searchParams.get('Salt') : undefined; // Needs to be Uint8Array.join()
     let Info = searchParams.has('Info') ? searchParams.get('Info') : undefined;
     let byteLength = searchParams.has('byteLength') ? Number(searchParams.get('byteLength')) : undefined;
@@ -84,7 +84,7 @@
 
     if (
         // Are you using the right method to reach us?
-        request.method != "GET" || pathname != "/"
+        request.method != "GET" || pathname != "/" || !pathname.startsWith("/array-key")
         
         // We make sure we actually have the data to both Authenticate you and Derivate your Key
         || psk !== AUTH_HEADER_VALUE || !receivedMacBase64 || !Key || !Salt || !Info || !isFinite(byteLength)
@@ -134,7 +134,7 @@
     
     // Step 2: If you got this far, you are properly authenticated, so we will
     // Derive the key you requested and just give it to you as is
-    Key = encoder.encode(btoa(Key));
+    Key = pathname.startsWith("/array-key") ? new Uint8Array(Key.split(',')) : ByteString_To_Uint8Array(atob(Key));
     Salt = new Uint8Array(Salt.split(','));
     Info = encoder.encode(Info);
     byteLength *= 8;
