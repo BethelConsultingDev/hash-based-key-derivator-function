@@ -19,6 +19,9 @@
   // This line captures the full source code of this worker
   const SourceCode = '(' + arguments.callee.toString() + ')()';
 
+  // This is going to help us encode data later on
+  const encoder = new TextEncoder();
+
 
   // addEventListener basically listens for your requests and then
   // sends them to our handleRequest function
@@ -61,7 +64,55 @@
       ui[i] = byteString.charCodeAt(i);
     }
     return ui;
-  } 
+  }
+
+
+  // Utility function to compare in constant time to prevent timing attacks.
+  // Based on Salesforce's Buffer Equal Constant Time
+  // https://github.com/salesforce/buffer-equal-constant-time/blob/master/index.js
+  // Please read their license information here:
+  // https://github.com/salesforce/buffer-equal-constant-time/blob/master/LICENSE.txt
+
+  function Compare(a, b) {
+
+    // If anything fails, it means the values were not valid or had some
+    // sort of problem, so it will return false, meaning, the two values
+    // are not the same
+    try {
+
+    // We need to encode a and b as fixed length raw bynary buffers
+    // In this case it will encode everything as Unsigned Int Arrays
+    a = encoder.encode(a);
+    b = encoder.encode(b);
+
+
+    // If the byte length is different, they are not the same values
+    if(a.length !== b.length) {
+      return false;
+    }
+
+    // We will check every byte of data within both values to make sure
+    // they are the same.
+
+    // In simple words, if two values are the same and we XOR them, the
+    // result should be 0. XOR is a comparisson between 0s and 1s.
+    // If we XOR two 0s, we get 0. If we XOR two 1s, we get 0
+    var c = 0;
+    for (let i = 0; i < a.length; i++) {
+      /*jshint bitwise:false */
+      c |= a[i] ^ b[i];
+    }
+
+    // At the end, if c is 0, it means both values were the same, if not
+    // then they were different.
+    return c === 0
+
+
+    } catch (err) {
+      return false;
+    }
+    
+  }
 
 
   // This is where we will handle your request 
@@ -70,8 +121,7 @@
   async function handleRequest(request) {
 
     const { searchParams , pathname } = new URL(request.url);
-    const encoder = new TextEncoder();
-
+    
     // Step 1: Authentication
 
     // Step 1a: Making sure you gave us everything we need on your request
@@ -87,7 +137,7 @@
         request.method != "GET" || pathname != "/" || !pathname.startsWith("/array-key")
         
         // We make sure we actually have the data to both Authenticate you and Derivate your Key
-        || psk !== AUTH_HEADER_VALUE || !receivedMacBase64 || !Key || !Salt || !Info || !isFinite(byteLength)
+        || Compare(psk, AUTH_HEADER_VALUE) || !receivedMacBase64 || !Key || !Salt || !Info || !isFinite(byteLength)
 
         // Now we make sure the Key Length is valid
         || byteLength <= 0 // It has to be higher than 0
